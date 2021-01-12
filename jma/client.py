@@ -6,8 +6,8 @@ import logging
 from enum import Enum
 import requests
 
-from exceptions import JmaException, NoSessionIdException, BadCsvException
-from response import JmaIrradiationResponse
+from jma.exceptions import JmaException, NoSessionIdException, BadCsvException
+from jma.response import JmaIrradiationResponse
 
 logger = logging.getLogger('jmaclient')
 

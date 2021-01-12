@@ -1,6 +1,6 @@
 """Test cases for responses"""
 import unittest
-from response import JmaIrradiationResponse, jp_date_to_iso
+from jma.response import JmaIrradiationResponse, jp_date_to_iso
 
 class TestJpDateConversion(unittest.TestCase):
     def test_january(self):

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from exceptions import BadCsvException
+from jma.exceptions import BadCsvException
 
 
 def jp_date_to_iso(text: str):
