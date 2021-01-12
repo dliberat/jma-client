@@ -10,7 +10,7 @@ This client can be used to programmatically download Global Irradiation data fro
 
 ```python
 from datetime import date
-from client import JmaClient, JmaStation
+from jma import JmaClient, JmaStation
 
 s = date(2020, 12, 31)
 e = date(2021, 1, 2)
