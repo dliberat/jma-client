@@ -11,7 +11,9 @@ class JmaStation(Enum):
     Matsue =     's47741' # shimane
     Miyakazki =  's47830' # miyazaki
     Morioka =    's47584' # iwate
+    Nagano =     's47610' # nagano
     Nagasaki =   's47817' # nagasaki
+    Nagoya =     's47636' # aichi
     Naha =       's47936' # okinawa
     Niigata =    's47604' # niigata
     Oita =       's47815' # oita
