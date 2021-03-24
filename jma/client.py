@@ -7,7 +7,7 @@ import requests
 
 from jma.exceptions import JmaException, NoSessionIdException, BadCsvException
 from jma.jmastation import JmaStation
-from jma.response import JmaIrradiationResponse
+from jma.response import JmaIrradiationResponse, JmaHourlyIrradiationResponse
 
 logger = logging.getLogger('jmaclient')
 
@@ -45,16 +45,7 @@ class JmaClient():
             kwargs['timeout'] = self.TIMEOUT
         return self.sess.post(*args, **kwargs)
 
-    def get_irradiation_data(self, start_date, end_date, stations, lta=True):
-        """
-        Args:
-            start_date (datetime.date) - First date for which irradiation data will be downloaded
-            end_date (datetime.date) - Last date for which irradiation data will be downloaded
-            stations (List[JmaStation]) - Iterable of JmaStation
-            lta (bool) - True if long-term average irradation should be included in results
-        Returns:
-            JmaIrradiationResponse
-        """
+    def _send_request(self, params):
         uri = 'https://www.data.jma.go.jp/gmd/risk/obsdl/show/table.html'
         hdr = {
             'Host':               'www.data.jma.go.jp',
@@ -68,6 +59,30 @@ class JmaClient():
             'Connection':         'keep-alive',
             'Referer':            'https://www.data.jma.go.jp/gmd/risk/obsdl/index.php',
         }
+        
+        res = self._post(uri, data=params, headers=hdr)
+        try:
+            res.raise_for_status()
+            raise_if_html(res.text)
+        except requests.exceptions.HTTPError:
+            logger.exception(f'POST request failed. Request body: {res.request.body}')
+            raise JmaException('Request failed')
+        except BadCsvException:
+            logger.exception(f'POST request failed. Request body: {res.request.body}')
+            raise
+        res.encoding = 'shift-jis'
+        return res
+
+    def get_daily_irradiation(self, start_date, end_date, stations, lta=False):
+        """Download irradiation data in increments of 1 day.
+        Args:
+            start_date (datetime.date) - First date for which irradiation data will be downloaded
+            end_date (datetime.date) - Last date (inclusive) for which irradiation data will be downloaded
+            stations (List[JmaStation]) - Iterable of JmaStation
+            lta (bool) - True if long-term average irradation should be included in results
+        Returns:
+            JmaIrradiationResponse
+        """
         date_arr = [
             start_date.year,
             end_date.year,
@@ -97,21 +112,53 @@ class JmaClient():
             'ymdLiteral':           1,
             'PHPSESSID':            self.php_sessid,
         }
-        res = self._post(uri, data=params, headers=hdr)
-        try:
-            res.raise_for_status()
-            raise_if_html(res.text)
-        except requests.exceptions.HTTPError:
-            logger.exception(f'POST request failed. Request body: {res.request.body}')
-            raise JmaException('Request failed')
-        except BadCsvException:
-            logger.exception(f'POST request failed. Request body: {res.request.body}')
-            raise
-        res.encoding = 'shift-jis'
+        res = self._send_request(params)
         return JmaIrradiationResponse(res.text, kwh=self.kwh)
 
+    def get_hourly_irradiation(self, start_date, end_date, stations, lta=False):
+        """Download irradiation data in increments of 1 hour.
+        Args:
+            start_date (datetime.date) - First date for which irradiation data will be downloaded
+            end_date (datetime.date) - Last date (inclusive) for which irradiation data will be downloaded
+            stations (List[JmaStation]) - Iterable of JmaStation
+            lta (bool) - True if long-term average irradation should be included in results
+        Returns:
+            JmaIrradiationResponse
+        """
+        date_arr = [
+            start_date.year,
+            end_date.year,
+            start_date.month,
+            end_date.month,
+            start_date.day,
+            end_date.day,
+        ]
+        opts = '[["op1",0]]' if lta else []
+        params = {
+            'stationNumList':       encode_list_for_jma([stn.value for stn in stations]),
+            'aggrgPeriod':          9,
+            'elementNumList':       '[["610",""]]',
+            'interAnnualFlag':      1,
+            'ymdList':             	encode_list_for_jma(date_arr),
+            'optionNumList':        opts,
+            'downloadFlag':         True,
+            'rmkFlag':              0,
+            'disconnectFlag':       0,
+            'youbiFlag':            0,
+            'fukenFlag':            0,
+            'kijiFlag':             0,
+            'huukouFlag':           0,
+            'csvFlag':              0,
+            'jikantaiFlag':         0,
+            'jikantaiList':         '[1,24]',
+            'ymdLiteral':           1,
+            'PHPSESSID':            self.php_sessid,
+        }
+        res = self._send_request(params)
+        return JmaHourlyIrradiationResponse(res.text, kwh=self.kwh)
 
-def encode_list_for_jma(seq):
+
+def encode_list_for_jma(seq) -> str:
     return '[' + ','.join([f'"{c}"' for c in seq]) + ']'
 
 
@@ -132,7 +179,6 @@ def extract_php_sessid(html: str):
         e = html.index('"', s+2)
         return html[s:e] # everything between the quotation marks 
     except ValueError:
-        logger.exception('Cannot locate PHP Session ID')
         logger.exception(html)
         raise NoSessionIdException('Cannot locate PHP Session ID')
 
